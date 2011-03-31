@@ -1,5 +1,5 @@
 /*!
- * UCSV v1.0.0
+ * UCSV v1.0.1
  * Provided under MIT License.
  *
  * Copyright 2010, Peter Johnson
@@ -8,8 +8,8 @@
 
 /* jsLint stuff */
 /*global */
-/*members arrayToCsv, charAt, chomp, csvToArray, isNumber, 
-    isString, length, push, replace, s, test, toString, trim
+/*members apply, arrayToCsv, charAt, csvToArray, length, prototype, push, 
+    replace, substring, test, toString, trim
 */
 
 "use strict";
@@ -17,7 +17,7 @@
  * Namespace for CSV functions
  * @namespace
  */
-CSV = (function () {
+var CSV = (function () {
 
 	var trim;
 
@@ -39,7 +39,7 @@ CSV = (function () {
 		}
 	}
 
-	trim = (function() {
+	trim = (function () {
 		// Fx 3.1 has a native trim function, it's about 10x faster, use it if it exists
 		if (String.prototype.trim) {
 			return function (s) {
@@ -48,9 +48,9 @@ CSV = (function () {
 		} else {
 			return function (s) {
 				return s.replace(/^\s*/g, '').replace(/\s*$/g, '');
-			}
+			};
 		}
-	})();
+	}());
 
 
 
