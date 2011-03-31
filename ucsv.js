@@ -1,5 +1,5 @@
 /*!
- * UCSV v1.0.1
+ * UCSV v1.0.2
  * Provided under MIT License.
  *
  * Copyright 2010, Peter Johnson
@@ -19,8 +19,22 @@
  */
 var CSV = (function () {
 
-	var trim;
-
+	var rxIsInt = /^\d+$/,
+	rxIsFloat = /^\d*\.\d+$|^\d+\.\d*$/,
+	rxNeedsQuoting = /^\s|\s$|,|"/,
+	trim = (function () {
+		// Fx 3.1 has a native trim function, it's about 10x faster, use it if it exists
+		if (String.prototype.trim) {
+			return function (s) {
+				return s.trim();
+			};
+		} else {
+			return function (s) {
+				return s.replace(/^\s*/, '').replace(/\s*$/, '');
+			};
+		}
+	}());
+ 
 	function isNumber(o) {
 		return Object.prototype.toString.apply(o) === '[object Number]';
 	}
@@ -39,24 +53,10 @@ var CSV = (function () {
 		}
 	}
 
-	trim = (function () {
-		// Fx 3.1 has a native trim function, it's about 10x faster, use it if it exists
-		if (String.prototype.trim) {
-			return function (s) {
-				return s.trim();
-			};
-		} else {
-			return function (s) {
-				return s.replace(/^\s*/g, '').replace(/\s*$/g, '');
-			};
-		}
-	}());
-
-
-
  /**
 	* Converts an array into a Comma Separated Values list.
 	* Each item in the array should be an array that represents one line in the CSV.
+	* Nulls are interpreted as empty fields.
 	*
 	* @param {String} a The array to convert
 	*
@@ -66,7 +66,7 @@ var CSV = (function () {
 	* @static
 	* @example
 	* var csvArray = [
-	* ['Leno, Jay', '10'],
+	* ['Leno, Jay', 10],
 	* ['Conan "Conando" O\'Brien', '11:35' ],
 	* ['Fallon, Jimmy', '12:35' ]
 	* ];
@@ -92,12 +92,17 @@ var CSV = (function () {
 					// Escape any " with double " ("")
 					cur = cur.replace(/"/g, '""');
 
-					// If the field starts or ends with whitespace, contains " or , enclose in quotes
-					if (/^\s|\s$|,|"/.test(cur)) {
+					// If the field starts or ends with whitespace, contains " or , or is a string representing a number
+					if (rxNeedsQuoting.test(cur) || rxIsInt.test(cur) || rxIsFloat.test(cur)) {
 						cur = '"' + cur + '"';
+					// quote empty strings
+					} else if (cur === "") {
+						cur = '""';
 					}
 				} else if (isNumber(cur)) {
 					cur = cur.toString(10);
+				} else if (cur === null) {
+					cur = '';
 				} else {
 					cur = cur.toString();
 				}
@@ -114,12 +119,13 @@ var CSV = (function () {
 	/**
 	 * Converts a Comma Separated Values string into an array of arrays.
 	 * Each line in the CSV becomes an array.
+	 * Empty fields are converted to nulls and non-quoted numbers are converted to integers or floats.
 	 *
 	 * @return The CSV parsed as an array
 	 * @type Array
 	 * 
 	 * @param {String} s The string to convert
-	 * @param {Boolean} [trm=false] If set to True leading and trailing whitespace is stripped off of each feild as it is imported
+	 * @param {Boolean} [trm=false] If set to True leading and trailing whitespace is stripped off of each non-quoted field as it is imported
 	 * @public
 	 * @static
 	 * @example
@@ -131,7 +137,7 @@ var CSV = (function () {
 	 * 
 	 * // array is now
 	 * // [
-	 * // ['Leno, Jay', '10'],
+	 * // ['Leno, Jay', 10],
 	 * // ['Conan "Conando" O\'Brien', '11:35' ],
 	 * // ['Fallon, Jimmy', '12:35' ]
 	 * // ];
@@ -146,19 +152,35 @@ var CSV = (function () {
 		field = '', // Buffer for building up the current field
 		row = [],
 		out = [],
-		i;
+		i,
+		processField;
 
-		trm = trm !== true ? false : true;
+		processField = function (field) {
+			if (fieldQuoted !== true) {
+				// If field is empty set to null
+				if (field === '') {
+					field = null;
+				// If the field was not quoted and we are trimming fields, trim it
+				} else if (trm === true) {
+					field = trim(field);
+				}
+
+				// Convert unquoted numbers to their appropriate types
+				if (rxIsInt.test(field)) {
+					field = parseInt(field, 10);
+				} else if (rxIsFloat.test(field)) {
+					field = parseFloat(field, 10);
+				}
+			}
+			return field;
+		};
 
 		for (i = 0; i < s.length; i += 1) {
 			cur = s.charAt(i);
 
 			// If we are at a EOF or EOR
 			if (inQuote === false && (cur === ',' || cur === "\n")) {
-				// If the field was not quoted and we are trimming fields, trim it
-				if (fieldQuoted !== true && trm === true) {
-					field = trim(field);
-				}
+				field = processField(field);
 				// Add the current field to the current row
 				row.push(field);
 				// If this is EOR append row to output and flush row
@@ -192,13 +214,14 @@ var CSV = (function () {
 				}
 			}
 		}
+
 		// Add the last field
+		field = processField(field);
 		row.push(field);
 		out.push(row);
 
 		return out;
 	}
-
 
 	return {
 		arrayToCsv: arrayToCsv,
